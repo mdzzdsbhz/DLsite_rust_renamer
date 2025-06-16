@@ -4,11 +4,13 @@ use std::collections::HashMap;
 use thiserror::Error;
 use std::path::Path;
 use std::fs;
+use tokio::fs as async_fs;
 use ureq::Error; // Needed for Error
 use ureq::Agent;
 use std::time::Duration;
 use std::io::Read;
 use headless_chrome::Browser;
+use anyhow::Context;
 
 #[derive(Debug, Error)]
 pub enum ScraperError {
@@ -137,23 +139,62 @@ impl Scraper for DlsiteScraper {
     }
 
     /// 下载封面图像（jpg），保存为 {目标目录}/cover.jpg
-    fn download_cover<'a>(&'a self, rjcode: &'a str, dest_dir: &'a Path) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<()>> + Send + 'a>> {
+    fn download_cover<'a>(&'a self, rjcode: &'a str, dest_dir: &'a Path)
+        -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<()>> + Send + 'a>>
+    {
         Box::pin(async move {
-            let url = format!("https://img.dlsite.jp/modpub/images2/work/doujin/RJ{}/{}_img_main.jpg",
-                &rjcode[2..5], rjcode);
+            if !rjcode.starts_with("RJ") || rjcode.len() < 5 {
+                println!("非法 RJ 码：{}", rjcode);
+                return None;
+            }
 
-            // You may need to use an async HTTP client here, e.g., reqwest, and ensure self.client is defined.
-            // let img_bytes = self.client.get(&url).send().await.ok()?.bytes().await.ok()?;
-            // For now, this is a placeholder for the actual download logic.
-            // Replace the following lines with your actual async HTTP client logic.
-            let img_bytes = match reqwest::get(&url).await.ok()?.bytes().await.ok() {
-                Some(bytes) => bytes,
-                None => return None,
+
+            let numeric = rjcode.get(2..7)?.parse::<u32>().ok()?; // 取 01240
+            let incremented = numeric + 1;                        // 加一，得到 01241
+            let dir = format!("RJ{:05}000", incremented);          // 拼 RJ0124100
+            let url = format!(
+                "https://img.dlsite.jp/modpub/images2/work/doujin/{}/{}_img_main.jpg",
+                dir, rjcode
+            );
+            println!("{}",url);
+
+        let client = reqwest::Client::new();
+        let resp = match client
+            .get(&url)
+            .header("User-Agent", "Mozilla/5.0")
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                println!("下载失败：{}，错误：{}", url, e);
+                return None;
+            }
+        };
+
+            if !resp.status().is_success() {
+                println!("请求失败：{} 状态码 {}", url, resp.status());
+                return None;
+            }
+
+            let img_bytes = match resp.bytes().await {
+                Ok(b) => b,
+                Err(e) => {
+                    println!("读取响应字节失败: {}", e);
+                    return None;
+                }
             };
+
             let save_path = dest_dir.join("cover.jpg");
-            fs::write(save_path, &img_bytes).ok()?;
+            if let Err(e) = async_fs::write(&save_path, &img_bytes).await {
+                println!("保存图像失败：{}，错误：{}", save_path.display(), e);
+                return None;
+            }
+
             Some(())
         })
     }
 
 }
+
+
