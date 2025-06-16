@@ -4,7 +4,7 @@ use crate::dlsite_scraper::{DlsiteScraper, Scraper, ScraperError};
 use crate::work_metadata::WorkMetadata;
 use crate::dlsite::Dlsite;
 use crate::config::Config;
-use crate::log_to_ui;
+use crate::ui_logger;
 
 /// 文件重命名器（泛型，支持任意实现了 Scraper 的抓取器）
 pub struct Renamer<S: Scraper> {
@@ -36,7 +36,7 @@ impl<S: Scraper> Renamer<S> {
     }
 
     /// 对某个 RJ 目录执行重命名（异步）
-    pub async fn rename_folder(&self, rjcode: &str, folder_path: &Path, logs: &std::sync::Arc<std::sync::Mutex<Vec<String>>>) -> anyhow::Result<()> {
+    pub async fn rename_folder(&self, rjcode: &str, folder_path: &Path) -> anyhow::Result<()> {
 
         let metadata = if let Some(ref cached) = self.metadata {
             cached.clone()
@@ -59,15 +59,15 @@ impl<S: Scraper> Renamer<S> {
         if new_path != folder_path {
             fs::rename(folder_path, &new_path)?;
 
-            log_to_ui!(logs,"✅ 已重命名: {} -> {}", rjcode, new_name);
+            log::info!("✅ 已重命名: {} -> {}", rjcode, new_name);
         } else {
-            log_to_ui!(logs,"ℹ️ 命名已是最新: {}", new_name);
+            log::info!("ℹ️ 命名已是最新: {}", new_name);
         }
 
         // 下载封面（可选）
         if self.save_cover {
             if let Some(e) = self.scraper.download_cover(rjcode, &new_path).await {
-                log_to_ui!(logs,"⚠️ 封面下载失败: {:?}", e);
+                log::info!("⚠️ 封面下载失败: {:?}", e);
             }
         }
 

@@ -22,5 +22,7 @@ ureq = "3.0.12"
 thiserror = "2.0.12"
 fs = "0.0.5"  # 文件系统操作
 headless_chrome = { version = "1.0.17" }
-
 rusqlite = { version = "0.36.0" }
+
+log = "0.4.27"
+once_cell = "1.21.3"  # 确保有这个

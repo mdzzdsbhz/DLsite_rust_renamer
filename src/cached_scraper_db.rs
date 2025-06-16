@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use crate::work_metadata::WorkMetadata;
 use crate::dlsite::Dlsite;
-use crate::log_to_ui;
+use crate::ui_logger;
+use log::info;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct WorkMeta {
@@ -49,13 +50,12 @@ impl CachedScraperDb {
         &self,
         scraper: impl Scraper,
         rjcode: &str,
-        logs: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     ) -> Result<WorkMeta, CacheError> {
         if let Some(cached) = self.get(rjcode)? {
-            log_to_ui!(logs,"🧊 缓存命中：{}", rjcode);
+            log::info!("🧊 缓存命中：{}", rjcode);
             return Ok(cached);
         }
-        log_to_ui!(logs,"🔥 未命中缓存，开始爬取：{}", rjcode);
+        log::info!("🔥 未命中缓存，开始爬取：{}", rjcode);
 
         // ✅ 使用 Dlsite 封装抓取逻辑
         let dlsite = Dlsite::new(scraper);
