@@ -1,0 +1,24 @@
+[package]
+name = "DLsite_rust_renamer"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.11.1"
+chrono = { version = "0.4.41" }
+eframe = "0.31.1"
+egui = "0.31.1"
+rfd = "0.15.3"  # 跨平台文件夹选择器
+walkdir = "2.5"
+
+reqwest = { version = "0.12", features = ["json", "blocking", "gzip", "brotli", "deflate", "stream", "cookies", "native-tls"] }
+tokio = { version = "1", features = ["full"] }
+scraper = "0.23.1"
+anyhow = "1.0.98"
+ureq = "3.0.11"
+thiserror = "2.0.12"
+fs = "0.0.5"  # 文件系统操作
+headless_chrome = { version = "1.0.17" }
