@@ -6,7 +6,7 @@ use regex::Regex;
 use chrono::Local;
 
 /// 默认配置结构体
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct Config {
     pub scan_depth: u32,

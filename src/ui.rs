@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use eframe::egui::{self, CentralPanel, ScrollArea, TextEdit, TopBottomPanel};
+use eframe::egui::{TextStyle, self, CentralPanel, ScrollArea, TextEdit, TopBottomPanel,Frame};
 use crate::config::Config;
 use crate::renamer::Renamer;
 use crate::scaner::{Scaner, ScanerImpl};
@@ -15,6 +15,7 @@ pub struct MyApp {
     scan_result: Vec<(String, PathBuf)>,
     logs: Arc<Mutex<Vec<String>>>,
 }
+
 
 impl MyApp {
     pub fn new(config_path: PathBuf) -> Self {
@@ -52,7 +53,7 @@ impl MyApp {
 
             for (rjcode, path) in target_dirs {
                 let scraper = DlsiteScraper::new();
-                let renamer = Renamer::new(scraper, true);
+                let renamer = Renamer::new(scraper, true, self.config.clone());
                 let logs = Arc::clone(&self.logs);
 
                 std::thread::spawn(move || {
@@ -60,7 +61,7 @@ impl MyApp {
                     rt.block_on(async move {
                         renamer.rename_folder(&rjcode, &path).await;
                         if let Ok(mut logs) = logs.lock() {
-                            logs.push(format!("✔️ {} 重命名完成", rjcode));
+                            logs.push(format!("✔️ {} 重命名完成, {}", rjcode, path.display()));
                         }
                     });
                 });
@@ -92,22 +93,55 @@ impl eframe::App for MyApp {
                 ui.label(format!("当前目录: {}", folder.display()));
             }
 
-            ui.separator();
-            ui.label("📜 日志输出：");
-            ScrollArea::vertical().max_height(300.0).show(ui, |ui| {
-                if let Ok(logs) = self.logs.lock() {
-                    for line in logs.iter() {
-                        ui.label(line);
-                    }
-                }
-            });
+                // 📜 日志输出部分
+                ui.separator();
+                ui.label("📜 日志输出：");
 
-            ui.separator();
-            ui.label("⚙️ 当前配置预览（只读）：");
-            ui.add_enabled_ui(false, |ui| {
-                ui.add(TextEdit::multiline(&mut serde_json::to_string_pretty(&self.config).unwrap())
-                    .desired_rows(10));
-            });
+                Frame::group(ui.style())
+                    .fill(ui.visuals().extreme_bg_color)
+                    .show(ui, |ui| {
+                        // 设置区域高度自动扩展
+                        ui.set_min_height(75.0);
+                        ui.set_max_height(150.0); // 你可以调大这个值看效果
+
+                        ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .stick_to_bottom(true)
+                            .show(ui, |ui| {
+                                if let Ok(logs) = self.logs.lock() {
+                                    for line in logs.iter() {
+                                        ui.label(line); // 自动 wrap，除非内容太长没空格
+                                    }
+                                }
+                            });
+                    });
+
+                // ⚙️ 配置预览部分
+                ui.separator();
+                ui.label("⚙️ 当前配置预览（只读）：");
+
+                let mut config_text = serde_json::to_string_pretty(&self.config).unwrap();
+
+                Frame::group(ui.style())
+                    .fill(ui.visuals().extreme_bg_color)
+                    .show(ui, |ui| {
+                        ui.set_min_height(100.0);
+                        ui.set_max_height(200.0); // 你也可以调大这个
+
+                        ScrollArea::vertical()
+                            .auto_shrink([false, false])
+                            .show(ui, |ui| {
+                                ui.add(
+                                    TextEdit::multiline(&mut config_text)
+                                        .font(TextStyle::Monospace)
+                                        .code_editor()
+                                        .desired_rows(10)
+                                        .desired_width(f32::INFINITY)
+                                        .interactive(false) // 设置只读
+                                );
+                            });
+                    
+                    });
         });
     }
 }
