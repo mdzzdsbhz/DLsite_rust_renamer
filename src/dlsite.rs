@@ -35,10 +35,10 @@ impl<S: Scraper> Dlsite<S> {
         println!("🌐 获取 JSON 元数据: {}", json_url);
         let json_data = self.scraper.fetch_page_json(&json_url)?;
 
-        // ⭐ 注意：API 返回的是 { "RJxxxxx": { ... } }
         let work_data = json_data
-            .get(rjcode)
-            .ok_or_else(|| ScraperError::ParseError("找不到对应的 RJ 编号数据".to_string()))?;
+            .as_array()
+            .and_then(|arr| arr.first())
+            .ok_or_else(|| ScraperError::ParseError(format!("未获取到 {} 的 JSON 数据", rjcode)))?;
 
         self.parse_metadata(rjcode, &html, Some(work_data.clone()))
     }
@@ -101,6 +101,7 @@ impl<S: Scraper> Dlsite<S> {
                 .map(|e| e.text().collect::<String>().trim().to_string())
         });
 
+        // 直接从 JSON 获取语言字段
         let language = json_data.as_ref()
             .and_then(|json| json.get("language"))
             .and_then(|v| v.as_str())

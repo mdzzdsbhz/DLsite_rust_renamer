@@ -86,82 +86,61 @@ impl Scraper for DlsiteScraper {
             }
         };
 
-        println!("📄 页面大小: {} 字节", body.len());
-
         if body.contains("この作品は存在しません") {
             println!("⚠️ 页面显示作品不存在");
             return Err(ScraperError::NotFound);
         }
-        println!("body: {}", body);
         Ok(body)
     }
 
 
-
-
     fn fetch_page_json(&self, url: &str) -> Result<serde_json::Value, ScraperError> {
-        println!("🌐 开始请求页面: {}", url);
+        println!("🌐 请求页面: {}", url);
 
-        let agent = Agent::new_with_defaults();
-        let mut request = agent.get(url);
-        for (key, value) in &self.headers {
-            request = request.header(key, value);
+        let mut req = ureq::get(url);
+        for (k, v) in &self.headers {
+            req = req.header(k, v);
         }
 
-        println!("🚀 发送请求中...");
-        let mut response = match request.call() {
-            Ok(resp) => {
-                println!("✅ 收到响应: {}", resp.status());
-                resp
+        let mut response = req.call().map_err(|e| {
+            println!("❌ 请求失败: {}", e);
+            match e {
+                ureq::Error::StatusCode(code) if code == 404 || code == 410 => ScraperError::NotFound,
+                ureq::Error::StatusCode(code) => ScraperError::HttpRequestError(format!("状态码错误: {}", code)),
+                _ => ScraperError::HttpRequestError(format!("{}", e)),
             }
-            Err(ureq::Error::StatusCode(code)) => {
-                println!("❌ 状态码错误: {}", code);
-                if code == 404 || code == 410 {
-                    return Err(ScraperError::NotFound);
-                }
-                return Err(ScraperError::HttpRequestError(format!("状态码错误: {}", code)));
-            }
-            Err(e) => {
-                println!("❌ 请求失败: {}", e);
-                return Err(ScraperError::HttpRequestError(format!("请求失败: {}", e)));
-            }
-        };
+        })?;
 
-        println!("📖 正在读取响应内容...");
-        let reader = response.body_mut(); // 获取字节流
-        println!("reader = {:?}", reader);
-        let body = match reader.read_to_string() {
-            Ok(s) => s,
-            Err(e) => {
-                println!("❌ 读取响应失败: {}", e);
-                return Err(ScraperError::HttpRequestError(format!("读取响应失败: {}", e)));
-            }
-        };
+        println!("✅ 状态: {}", response.status());
 
-        println!("📄 响应大小: {} 字节", body.len());
+        let body = response
+            .body_mut()
+            .read_to_string()
+            .map_err(|e| {
+                println!("❌ 读取失败: {}", e);
+                ScraperError::HttpRequestError(format!("{}", e))
+            })?;
+        let line = body.lines().next().unwrap_or("");
+        // print!("{}", line);
 
-        // 🚨 只取第一行作为 JSON
-        let first_line = body.lines().next().unwrap_or("");
+        // 解析 JSON，期望返回一个包含对象的数组
+        let json: serde_json::Value = serde_json::from_str(line).map_err(|e| {
+            println!("❌ JSON 解析失败: {}", e);
+            ScraperError::HttpRequestError(format!("解析 JSON 失败: {}", e))
+        })?;
 
-        let json: serde_json::Value = match serde_json::from_str(first_line) {
-            Ok(val) => val,
-            Err(e) => {
-                println!("❌ 解析 JSON 失败: {}", e);
-                return Err(ScraperError::HttpRequestError(format!("解析 JSON 失败: {}", e)));
-            }
-        };
 
-        // 如果是数组，则取第一个元素
-        if let Some(arr) = json.as_array() {
-            if let Some(first) = arr.first() {
-                return Ok(first.clone());
-            } else {
-                return Err(ScraperError::HttpRequestError("返回的 JSON 数组为空".to_string()));
-            }
-        } else {
-            return Err(ScraperError::HttpRequestError("返回的 JSON 不是数组".to_string()));
+        // 确保是数组并从数组中获取第一个 JSON 对象
+        match json.as_array() {
+            Some(arr) if !arr.is_empty() => {
+                println!("✅ JSON 解析成功");
+                Ok(arr[0].clone())
+            },
+            _ => Err(ScraperError::HttpRequestError("返回的 JSON 不是一个非空数组".into())),
         }
     }
+
+
 
 
 
