@@ -1,36 +1,53 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use crate::dlsite_scraper::DlsiteScraper;
-use crate::dlsite_scraper::Scraper;
+use crate::dlsite_scraper::{DlsiteScraper, Scraper, ScraperError};
 use crate::work_metadata::WorkMetadata;
 use crate::dlsite::Dlsite;
-use crate::dlsite_scraper::ScraperError;
-use crate::config::Config; // Add this line to import Config
-
+use crate::config::Config;
+use crate::log_to_ui;
 
 /// 文件重命名器（泛型，支持任意实现了 Scraper 的抓取器）
 pub struct Renamer<S: Scraper> {
     pub scraper: S,
     pub save_cover: bool,
     pub config: Config,
+    pub metadata: Option<WorkMetadata>, // ✅ 可选元数据缓存
 }
 
 impl<S: Scraper> Renamer<S> {
+    /// 默认构造方式：需要爬虫获取元数据
     pub fn new(scraper: S, save_cover: bool, config: Config) -> Self {
-        Self { scraper, save_cover, config }
+        Self {
+            scraper,
+            save_cover,
+            config,
+            metadata: None,
+        }
+    }
+
+    /// 新增构造方式：已获取元数据，避免重复抓取
+    pub fn new_from_metadata(scraper: S, save_cover: bool, config: Config, metadata: WorkMetadata) -> Self {
+        Self {
+            scraper,
+            save_cover,
+            config,
+            metadata: Some(metadata),
+        }
     }
 
     /// 对某个 RJ 目录执行重命名（异步）
-    pub async fn rename_folder(&self, rjcode: &str, folder_path: &Path) -> anyhow::Result<()> {
-        let scraper = DlsiteScraper::new();
-        let dlsite = Dlsite::new(scraper);
+    pub async fn rename_folder(&self, rjcode: &str, folder_path: &Path, logs: &std::sync::Arc<std::sync::Mutex<Vec<String>>>) -> anyhow::Result<()> {
 
-        // 抓取作品信息
-        let metadata: WorkMetadata = match dlsite.fetch_metadata(rjcode) {
-            Ok(data) => data,
-            Err(e) => {
-                eprintln!("❌ 获取元数据失败: {rjcode}，错误信息: {e}");
-                return Ok(()); // 不 panic，跳过此目录
+        let metadata = if let Some(ref cached) = self.metadata {
+            cached.clone()
+        } else {
+            let dlsite = Dlsite::new(DlsiteScraper::new());
+            match dlsite.fetch_metadata(rjcode) {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("❌ 获取元数据失败: {rjcode}，错误信息: {e}");
+                    return Ok(());
+                }
             }
         };
 
@@ -41,15 +58,16 @@ impl<S: Scraper> Renamer<S> {
         // 执行重命名
         if new_path != folder_path {
             fs::rename(folder_path, &new_path)?;
-            println!("✅ 已重命名: {} -> {}", rjcode, new_name);
+
+            log_to_ui!(logs,"✅ 已重命名: {} -> {}", rjcode, new_name);
         } else {
-            println!("ℹ️ 命名已是最新: {}", new_name);
+            log_to_ui!(logs,"ℹ️ 命名已是最新: {}", new_name);
         }
 
         // 下载封面（可选）
         if self.save_cover {
             if let Some(e) = self.scraper.download_cover(rjcode, &new_path).await {
-                eprintln!("⚠️ 封面下载失败: {:?}", e);
+                log_to_ui!(logs,"⚠️ 封面下载失败: {:?}", e);
             }
         }
 
@@ -60,13 +78,12 @@ impl<S: Scraper> Renamer<S> {
     fn generate_name(&self, info: &WorkMetadata) -> String {
         let mut name = self.config.rename_template.clone();
 
-        // 定义模板变量及其实际值
-        let circle = info.circle.as_ref().unwrap_or(&"Unknown".to_string()).clone();
-        let cv = info.voice_actor.as_ref().unwrap_or(&"Unknown".to_string()).clone();
-        let lang = info.lang.as_ref().unwrap_or(&"Unknown".to_string()).clone();
-        let release_date = info.release_date.as_ref().unwrap_or(&"Unknown".to_string()).clone();
-        let series = info.series.as_ref().unwrap_or(&"Unknown".to_string()).clone();
-        let age_rating = info.age_rating.as_ref().unwrap_or(&"Unknown".to_string()).clone();
+        let circle = info.circle.as_ref().unwrap_or(&"".to_string()).clone();
+        let cv = info.voice_actor.as_ref().unwrap_or(&"".to_string()).clone();
+        let lang = info.lang.as_ref().unwrap_or(&"".to_string()).clone();
+        let release_date = info.release_date.as_ref().unwrap_or(&"".to_string()).clone();
+        let series = info.series.as_ref().unwrap_or(&"".to_string()).clone();
+        let age_rating = info.age_rating.as_ref().unwrap_or(&"".to_string()).clone();
         let genre = info.tags.join(",");
         let categories = info.categories.join(",");
 
@@ -83,12 +100,10 @@ impl<S: Scraper> Renamer<S> {
             ("[age_rating]", &age_rating),
         ];
 
-        // 替换模板中的变量
         for (key, value) in replacements {
             name = name.replace(key, value);
         }
 
-        // 替换非法字符
         if self.config.remove_illegal_chars {
             let illegal_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
             name = name
@@ -97,7 +112,6 @@ impl<S: Scraper> Renamer<S> {
                 .collect();
         }
 
-        // 保留或去除括号
         if !self.config.keep_brackets {
             name = name.replace('[', "").replace(']', "");
         }

@@ -1,5 +1,6 @@
 // src/work_metadata/work_metadata.rs
 use serde::{Deserialize, Serialize};
+use crate::cached_scraper_db::WorkMeta;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkMetadata {
@@ -31,6 +32,29 @@ impl WorkMetadata {
             lang: None,
         }
     }
+
+        /// 从缓存中的 WorkMeta 转换为 WorkMetadata（补全结构）
+    pub fn from_work_meta(meta: &crate::cached_scraper_db::WorkMeta) -> Self {
+        let mut metadata = WorkMetadata {
+            rjcode: meta.rjcode.clone(),
+            title: meta.title.clone(),
+            circle: Some(meta.maker.clone()),
+            release_date: meta.date.clone(),
+            tags: Vec::new(),
+            voice_actor: None,
+            series: None,
+            categories: Vec::new(),
+            age_rating: None,
+            lang: None,
+        };
+        // 以防万一缓存没有语言，重新猜测一次
+        if metadata.lang.is_none() {
+            metadata.guess_lang();
+        }
+        metadata
+    }
+
+
 
     /// 从 JSON 字符串解析
     pub fn from_json(json_str: &str) -> Result<Self, serde_json::Error> {

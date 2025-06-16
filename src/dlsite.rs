@@ -55,7 +55,6 @@ impl<S: Scraper> Dlsite<S> {
     fn parse_metadata(&self, rjcode: &str, html: &str, json_data: Option<Value>) -> Result<WorkMetadata, ScraperError> {
         let document = Html::parse_document(html);
 
-        let sel_title = Selector::parse("span#work_name").unwrap();
         let sel_circle = Selector::parse("span#maker_name a").unwrap();
         let sel_genres = Selector::parse("span#work_genre span.genre_item").unwrap();
         let sel_tags = Selector::parse("span#work_memo span.genre_item").unwrap();
@@ -68,12 +67,6 @@ impl<S: Scraper> Dlsite<S> {
     let title = json_data
         .as_ref()
         .and_then(|json| Self::extract_first_string_field(json, "work_name"))
-        .or_else(|| {
-            document
-                .select(&sel_title)
-                .next()
-                .map(|e| e.text().collect::<String>().trim().to_string())
-        })
         .unwrap_or_else(|| "(无标题)".to_string());
 
     let circle = json_data
@@ -174,7 +167,7 @@ impl<S: Scraper> Dlsite<S> {
     );
 
     metadata.guess_lang();
-
+    println!("✅ 解析完成：{:#?}", metadata);
     Ok(metadata)
 }
 

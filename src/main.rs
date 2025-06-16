@@ -6,6 +6,7 @@ mod ui;
 mod fonts;
 mod work_metadata;
 mod dlsite;
+mod cached_scraper_db;
 
 use std::panic;
 use std::fs::OpenOptions;
@@ -14,6 +15,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use eframe::NativeOptions;
 use ui::MyApp;
+
+#[macro_use]
+mod utils; // 这会加载 log_macro.rs 中的宏
 
 fn setup_panic_hook() {
     panic::set_hook(Box::new(|panic_info| {
