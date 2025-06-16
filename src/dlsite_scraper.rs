@@ -78,11 +78,13 @@ impl Scraper for DlsiteScraper {
 
         // 🧪 3. 尝试读取响应内容
         println!("📖 正在读取响应内容...");
-        let body = String::new();
-        if let Err(e) = response.body_mut().read_to_string() {
-            println!("❌ 读取响应失败: {}", e);
-            return Err(ScraperError::HttpRequestError(format!("读取响应失败: {}", e)));
-        }
+        let body = match response.body_mut().read_to_string() {
+            Ok(s) => s,
+            Err(e) => {
+                println!("❌ 读取响应失败: {}", e);
+                return Err(ScraperError::HttpRequestError(format!("读取响应失败: {}", e)));
+            }
+        };
 
         println!("📄 页面大小: {} 字节", body.len());
 
@@ -126,13 +128,15 @@ impl Scraper for DlsiteScraper {
         };
 
         println!("📖 正在读取响应内容...");
-        let mut body = String::new();
         let reader = response.body_mut(); // 获取字节流
         println!("reader = {:?}", reader);
-        if let Err(e) = reader.read_to_string() {
-            println!("❌ 读取响应失败: {}", e);
-            return Err(ScraperError::HttpRequestError(format!("读取响应失败: {}", e)));
-        }
+        let body = match reader.read_to_string() {
+            Ok(s) => s,
+            Err(e) => {
+                println!("❌ 读取响应失败: {}", e);
+                return Err(ScraperError::HttpRequestError(format!("读取响应失败: {}", e)));
+            }
+        };
 
         println!("📄 响应大小: {} 字节", body.len());
 
