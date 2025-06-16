@@ -106,46 +106,37 @@ impl Scraper for DlsiteScraper {
             println!("❌ 请求失败: {}", e);
             match e {
                 ureq::Error::StatusCode(code) if code == 404 || code == 410 => ScraperError::NotFound,
-                ureq::Error::StatusCode(code) => ScraperError::HttpRequestError(format!("状态码错误: {}", code)),
+                ureq::Error::StatusCode(code) => {
+                    ScraperError::HttpRequestError(format!("状态码错误: {}", code))
+                }
                 _ => ScraperError::HttpRequestError(format!("{}", e)),
             }
         })?;
 
         println!("✅ 状态: {}", response.status());
 
-        let body = response
-            .body_mut()
-            .read_to_string()
-            .map_err(|e| {
-                println!("❌ 读取失败: {}", e);
-                ScraperError::HttpRequestError(format!("{}", e))
-            })?;
-        let line = body.lines().next().unwrap_or("");
-        // print!("{}", line);
+        let body = response.body_mut().read_to_string().map_err(|e| {
+            println!("❌ 读取失败: {}", e);
+            ScraperError::HttpRequestError(format!("{}", e))
+        })?;
 
-        // 解析 JSON，期望返回一个包含对象的数组
-        let json: serde_json::Value = serde_json::from_str(line).map_err(|e| {
+        // 尝试解析完整 JSON 字符串
+        let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
             println!("❌ JSON 解析失败: {}", e);
             ScraperError::HttpRequestError(format!("解析 JSON 失败: {}", e))
         })?;
 
-
-        // 确保是数组并从数组中获取第一个 JSON 对象
-        match json.as_array() {
-            Some(arr) if !arr.is_empty() => {
-                println!("✅ JSON 解析成功");
-                Ok(arr[0].clone())
-            },
-            _ => Err(ScraperError::HttpRequestError("返回的 JSON 不是一个非空数组".into())),
+        if json.is_array() {
+            println!("✅ JSON 数组解析成功，共 {} 项", json.as_array().unwrap().len());
+            Ok(json)
+        } else {
+            Err(ScraperError::HttpRequestError(
+                "返回的 JSON 不是数组".into(),
+            ))
         }
     }
 
-
-
-
-
-
-        /// 下载封面图像（jpg），保存为 {目标目录}/cover.jpg
+    /// 下载封面图像（jpg），保存为 {目标目录}/cover.jpg
     fn download_cover<'a>(&'a self, rjcode: &'a str, dest_dir: &'a Path) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<()>> + Send + 'a>> {
         Box::pin(async move {
             let url = format!("https://img.dlsite.jp/modpub/images2/work/doujin/RJ{}/{}_img_main.jpg",

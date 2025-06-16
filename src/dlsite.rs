@@ -38,9 +38,17 @@ impl<S: Scraper> Dlsite<S> {
         let work_data = json_data
             .as_array()
             .and_then(|arr| arr.first())
-            .ok_or_else(|| ScraperError::ParseError(format!("未获取到 {} 的 JSON 数据", rjcode)))?;
+            .ok_or_else(|| {
+                eprintln!("⚠️ JSON 数据结构异常，未找到数组或首个元素为空！");
+                ScraperError::ParseError(format!("未获取到 {} 的 JSON 数据", rjcode))
+            })?;
 
-        self.parse_metadata(rjcode, &html, Some(work_data.clone()))
+        let metadata = self.parse_metadata(rjcode, &html, Some(work_data.clone()))?;
+
+        println!("\n✅ 元数据解析完成：");
+        println!("{:#?}", metadata);
+
+        Ok(metadata)
     }
 
     fn parse_metadata(&self, rjcode: &str, html: &str, json_data: Option<Value>) -> Result<WorkMetadata, ScraperError> {
