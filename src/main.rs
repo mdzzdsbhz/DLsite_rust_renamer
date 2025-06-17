@@ -17,7 +17,6 @@ use std::path::PathBuf;
 use eframe::NativeOptions;
 use ui::MyApp;
 
-
 fn setup_panic_hook() {
     panic::set_hook(Box::new(|panic_info| {
         let msg = format!("⚠️ Panic 发生了：{}\n", panic_info);
@@ -28,12 +27,29 @@ fn setup_panic_hook() {
 
 
 fn main() -> eframe::Result<()> {
-    setup_panic_hook(); // <<<< 加上这行
+    setup_panic_hook(); // <<<< 保留 panic 捕捉
+
     // 默认 config.json 路径（可根据实际情况修改）
     let config_path = PathBuf::from("config.json");
 
-    // 创建 GUI 应用
+    // ✅ 读取配置并设置环境代理变量（必须在创建任何网络请求前）
+    if let Ok(config) = config::Config::load(config_path.to_str().unwrap()) {
+        if let Some(proxy) = &config.proxy {
+            unsafe {
+                std::env::set_var("HTTP_PROXY", proxy);
+                std::env::set_var("HTTPS_PROXY", proxy);
+            }
+            println!("✅ 设置环境代理: {}", proxy);
+            log::error!("✅ 设置环境代理: {}", proxy);
+        }
+    } else {
+        eprintln!("⚠️ 加载配置失败，跳过代理设置");
+        log::error!("⚠️ 加载配置失败，跳过代理设置");
+    }
+
+    // ✅ 创建 GUI 应用
     let app = MyApp::new(config_path);
+
     let native_options = NativeOptions {
         ..Default::default()
     };

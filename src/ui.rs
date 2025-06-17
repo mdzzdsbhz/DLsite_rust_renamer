@@ -125,7 +125,7 @@ impl eframe::App for MyApp {
                 .show(ui, |ui| {
                     // 设置区域高度自动扩展
                     ui.set_min_height(75.0);
-                    ui.set_max_height(150.0); // 你可以调大这个值看效果
+                    ui.set_max_height(125.0); // 你可以调大这个值看效果
 
                     ScrollArea::vertical()
                         .auto_shrink([false, false])
