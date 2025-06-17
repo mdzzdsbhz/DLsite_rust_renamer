@@ -1,5 +1,4 @@
 
-````
 # DLsite Rust Renamer
 
 基于 Rust 编写的 DLsite 作品重命名工具，支持自动抓取作品信息并根据预设规则批量重命名本地文件夹，适用于 Windows 平台。
